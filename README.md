@@ -1,5 +1,9 @@
 # cs1302-gitdot
 
+```sh
+$ git log --all --decorate --oneline --graph
+```
+
 ```
 *   86051d8 (HEAD -> main) Merge branch 'test'
 |\
@@ -11,10 +15,18 @@
 * 91cec6b initial commit
 ```
 
-![Example Image Output](example.png)
+```
+$ gitdot.sh | dot -Tsvg > output.svg
+```
+
+<img align="center" alt="Example Image Output" src="example.svg">
 
 ## Usage
 
 ```sh
 $ gitdot.sh
+```
+
+```
+$ gitdot.sh | dot -Tsvg > output.svg
 ```
