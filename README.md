@@ -18,3 +18,7 @@
 ```sh
 $ gitdot.sh
 ```
+
+```
+$ gitdot.sh | dot -Tsvg > output.svg
+```
