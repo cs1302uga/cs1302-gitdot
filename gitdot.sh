@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/bin/bash
+#
 # gitdot - generate a dot digraph of the current Git repository
 #
 # MIT License
@@ -26,23 +27,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-STYLE_FONT="fontname=\"Roboto Medium\", fontsize=11"
-STYLE_EDGE="color=dimgray"
-STYLE_NODE="shape=box, style=filled, color=lightgray, fillcolor=whitesmoke"
-STYLE_HEAD="style=filled, color=gold3, fillcolor=gold3, fontcolor=white"
-STYLE_BRANCH="style=filled, color=red3, fillcolor=red3, fontcolor=white"
+set -o errexit
+set -o pipefail
+set -o nounset
+
+readonly STYLE_FONT="fontname=\"Roboto Medium\", fontsize=11"
+readonly STYLE_EDGE="color=dimgray"
+readonly STYLE_NODE="shape=box, style=filled, color=lightgray, fillcolor=whitesmoke"
+readonly STYLE_HEAD="style=filled, color=gold3, fillcolor=gold3, fontcolor=white"
+readonly STYLE_BRANCH="style=filled, color=red3, fillcolor=red3, fontcolor=white"
 
 declare -A branches
 declare -A commits
 
-# first([args])
-# Return the first token.
-function first() {
-    [[ -p /dev/stdin ]] && local args="$(cat -)" || local args=$*
-    cat <<<$args | cut -d' ' -f1
-} # first
+# field(LIST)
+# Print the fields described by LIST from a space-delimited input string
+# constructed from the concatenation of piped input and any remaining
+# command-line arguments.
+# Usage: cmd | field INDEX        # field INDEX from "$(cmd)"
+# Usage: field INDEX ARG...       # field INDEX from "ARG..."
+# Usage: cmd | field INDEX ARG... # field INDEX from "$(cmd) ARG..."
+function field() {
+    local index=$1; shift
+    local input=$*
+    [[ -p /dev/stdin ]] && local input="$(cat -) $*"
+    cat <<<$input | cut -d' ' -f $index
+} # field
 
-# take(void)
+# git-short-hash()
 # Return the first 7 characters from standard input.
 function git-short-hash() {
     [[ -p /dev/stdin ]] && local args="$(cat -)" || local args=$*
@@ -74,54 +86,93 @@ function git-revs() {
     done
 } # git-revs
 
-HEAD=$(git-head)
+# dot-node(NAME, LABEL[, STYLE])
+function dot-node() {
+    local name=$1
+    local label=$2
+    shift 2
+    if [[ $# -gt 0 ]]; then
+        echo "    ${name} [label=\"${label}\", $*]"
+    else
+        echo "    ${name} [label=\"${label}\"]"
+    fi
+} #dot-node
 
-cat <<EOF
+function dot-edge() {
+    local node1=$1
+    local node2=$2
+    shift 2
+    if [[ $# -gt 0 ]]; then
+        echo "    ${node1} -> ${node2} [$*]"
+    else
+        echo "    ${node1} -> ${node2}"
+    fi
+} # dot-edge
+
+function dot-subgraph() {
+    local label=$1
+    shift
+    echo "    subgraph ${label} {"
+    echo "        rank=\"same\""
+    for node in $@; do
+        echo "        ${node}"
+    done
+    echo "    }"
+} # dot-subgraph
+
+function dot-branch-nodes() {
+    local i=1
+    for branch in $(git-branch-names); do
+        branches["b$i"]=$(git-short-hash $branch)
+        dot-node "b$i" "$branch" ${STYLE_BRANCH}
+        ((i=i+1))
+    done
+} # dot-branch-nodes
+
+function dot-commit-nodes-and-edges() {
+    local i=1
+    while read -r line; do
+        commit=$(echo $line | field 1)
+        commits[$commit]="c$i"
+        dot-node "${commits[$commit]}" "$commit"
+        if [ $(wc -w <<< $line) -gt 1 ]; then
+            parents=$(echo $line | field 2-)
+            for parent in $parents; do
+                dot-edge "${commits[$commit]}" "${commits[$parent]}"
+            done
+        fi
+        ((i=i+1))
+    done < <(git-revs)
+} # dot-commit-nodes-and-edges
+
+function dot-branch-edges {
+    for branch in "${!branches[@]}"; do
+        commit=${branches[${branch}]}
+        node=${commits[$commit]}
+        dot-edge "$branch" "$node"
+        if [ "${commit}" == "$(git-head)" ]; then
+            dot-subgraph "${branch}_sub" "${branch}" "${node}" "head"
+            dot-edge "head" "${branch}"
+        else
+            dot-subgraph "${branch}_sub" "${branch}" "${node}"
+        fi
+    done
+} # dot-branch-edges
+
+function dot-digraph {
+    cat <<EOF
 digraph {
     rankdir=RL
     edge [${STYLE_EDGE}]
     node [${STYLE_NODE}, ${STYLE_FONT}]
     head [label="HEAD", ${STYLE_HEAD}]
 EOF
-
-i=1
-for branch in $(git-branch-names); do
-    branches["b$i"]=$(git-short-hash $branch)
-    echo "    b$i [label=\"$branch\", ${STYLE_BRANCH}]"
-    ((i=i+1))
-done
-
-i=1
-while read -r line; do
-    commit=$(echo $line | first)
-    commits[$commit]="c$i"
-    echo "    ${commits[$commit]} [label=\"$commit\"]"
-    if [ $(wc -w <<< $line) -gt 1 ]; then
-        parents=$(echo $line | cut -d ' ' -f 2-)
-        for parent in $parents; do
-            echo "    ${commits[$commit]} -> ${commits[$parent]}"
-        done
-    fi
-    ((i=i+1))
-done < <(git-revs)
-
-for branch in "${!branches[@]}"; do
-    commit=${branches[${branch}]}
-    ref=${commits[$commit]}
-    echo "    $branch -> $ref"
-    echo "    subgraph ${branch}_sub {"
-    echo "        rank=\"same\""
-    echo "        $branch"
-    echo "        $ref"
-    if [ "$commit" == "$HEAD" ]; then
-        echo "        head"
-    fi
-    echo "    }"
-    if [ "$commit" == "$HEAD" ]; then
-        echo "    head -> $branch"
-    fi
-done
-
-cat <<EOF
+    dot-branch-nodes
+    dot-commit-nodes-and-edges
+    dot-branch-edges
+    cat <<EOF
 }
 EOF
+} # dot-digraph
+
+dot-digraph
