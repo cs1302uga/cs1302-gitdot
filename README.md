@@ -24,9 +24,13 @@ $ gitdot.sh | dot -Tsvg > output.svg
 ## Usage
 
 ```sh
-$ gitdot.sh
+$ alias gitdot=/path/to/gitdot.sh
 ```
 
 ```
-$ gitdot.sh | dot -Tsvg > output.svg
+$ gitdot > output.dot
+```
+
+```
+$ gitdot | dot -Tsvg > output.svg
 ```
