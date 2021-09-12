@@ -26,9 +26,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+STYLE_FONT="fontname=\"Roboto Medium\", fontsize=11"
+STYLE_EDGE="color=dimgray"
+STYLE_NODE="shape=box, style=filled, color=lightgray, fillcolor=whitesmoke"
+STYLE_HEAD="style=filled, color=gold3, fillcolor=gold3, fontcolor=white"
+STYLE_BRANCH="style=filled, color=red3, fillcolor=red3, fontcolor=white"
+
 declare -A branches
 declare -A commits
-declare -A parents
 
 # first([args])
 # Return the first token.
@@ -74,15 +79,15 @@ HEAD=$(git-head)
 cat <<EOF
 digraph {
     rankdir=RL
-    edge [color=dimgray]
-    node [shape=box, style=filled, color=lightgray, fillcolor=whitesmoke, fontname="Roboto Medium", fontsize=11]
-    head [label="HEAD", style=filled, color=gold3, fillcolor=gold3, fontcolor=white]
+    edge [${STYLE_EDGE}]
+    node [${STYLE_NODE}, ${STYLE_FONT}]
+    head [label="HEAD", ${STYLE_HEAD}]
 EOF
 
 i=1
 for branch in $(git-branch-names); do
     branches["b$i"]=$(git-short-hash $branch)
-    echo "    b$i [label=\"$branch\", style=filled, color=red3, fillcolor=red3, fontcolor=white]"
+    echo "    b$i [label=\"$branch\", ${STYLE_BRANCH}]"
     ((i=i+1))
 done
 
@@ -92,9 +97,9 @@ while read -r line; do
     commits[$commit]="c$i"
     echo "    ${commits[$commit]} [label=\"$commit\"]"
     if [ $(wc -w <<< $line) -gt 1 ]; then
-        for parent in $(echo $line | cut -d ' ' -f 2-); do
-            parents[$commit]=${commits[$parent]}
-            echo "    ${commits[$commit]} -> ${parents[$commit]}"
+        parents=$(echo $line | cut -d ' ' -f 2-)
+        for parent in $parents; do
+            echo "    ${commits[$commit]} -> ${commits[$parent]}"
         done
     fi
     ((i=i+1))
