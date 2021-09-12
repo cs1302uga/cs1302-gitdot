@@ -15,10 +15,6 @@ $ git log --all --decorate --oneline --graph
 * 91cec6b initial commit
 ```
 
-```
-$ gitdot.sh | dot -Tsvg > output.svg
-```
-
 <img align="center" alt="Example Image Output" src="example.svg">
 
 ## Usage
@@ -30,6 +26,9 @@ $ alias gitdot=/path/to/gitdot.sh
 ```
 $ gitdot > output.dot
 ```
+
+If you have [Graphviz](https://graphviz.org/) installed, then you can
+generate an image file using the output produced by `gitdot`.
 
 ```
 $ gitdot | dot -Tsvg > output.svg
