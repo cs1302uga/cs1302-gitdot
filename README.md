@@ -22,9 +22,8 @@
 | `b1`   | `main`    | `c6`       |
 | `b2`   | `test     | `c5`       |
 | 'head` | `HEAD`    | `b1`       |
-```
 
-```
+```dot
 digraph {
     rankdir=RL
     edge [color=dimgray]
