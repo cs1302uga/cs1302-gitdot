@@ -19,7 +19,7 @@ $ git log --all --decorate --oneline --graph
 $ gitdot.sh | dot -Tsvg > output.svg
 ```
 
-![Example Image Output](example.svg)
+<img align="center" alt="Example Image Output" src="example.svg">
 
 ## Usage
 
