@@ -11,7 +11,7 @@
 * 91cec6b initial commit
 ```
 
-![Example Image Output](example.png)
+![Example Image Output](example.svg)
 
 ## Usage
 
