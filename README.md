@@ -1,5 +1,9 @@
 # cs1302-gitdot
 
+```sh
+$ git log --all --decorate --oneline --graph
+```
+
 ```
 *   86051d8 (HEAD -> main) Merge branch 'test'
 |\
@@ -9,6 +13,10 @@
 |/
 * 53e37a2 adde header to README
 * 91cec6b initial commit
+```
+
+```
+$ gitdot.sh | dot -Tsvg > output.svg
 ```
 
 ![Example Image Output](example.svg)
