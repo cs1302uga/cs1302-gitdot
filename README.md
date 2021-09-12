@@ -1,7 +1,7 @@
 # cs1302-gitdot
 
 ```
-*   86051d8 (HEAD -> main) Merge branch 'stuff-and-things'
+*   86051d8 (HEAD -> main) Merge branch 'test'
 |\
 | * 8697605 (test) upate readme again
 | * e4b00ee added things
