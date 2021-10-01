@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # gitdot - generate a dot digraph of the current Git repository
 #
@@ -37,10 +37,9 @@ readonly STYLE_NODE="shape=box, style=filled, color=lightgray, fillcolor=whitesm
 readonly STYLE_HEAD="style=filled, color=gold3, fillcolor=gold3, fontcolor=white"
 readonly STYLE_BRANCH="style=filled, color=red3, fillcolor=red3, fontcolor=white"
 
-declare -A branches
-declare -A commits
+declare -A branches # branches[branch_node_name] -> commit_short_hash
+declare -A commits  # commits[commit_short_hash] -> commit_node_name
 
-# field(LIST)
 # Print the fields described by LIST from a space-delimited input string
 # constructed from the concatenation of piped input and any remaining
 # command-line arguments.
@@ -54,29 +53,36 @@ function field() {
     cat <<<$input | cut -d' ' -f $index
 } # field
 
-# git-short-hash()
-# Return the first 7 characters from standard input.
+# Print the abbreviated (short) SHA-1 hash for a commit HASH.
+# Usage: cmd | git-short-hash # short hash for HASH from "$(cmd)"
+# Usage: git-short-hash HASH  # short hash for HASH
 function git-short-hash() {
     [[ -p /dev/stdin ]] && local args="$(cat -)" || local args=$*
     git rev-parse --short $args
 } # git-short-hash
 
-# git-head(void)
-# Return the commit hash for HEAD.
+# Print the abbreviated (short) commit hash for HEAD.
+# Usage: git-head
 function git-head() {
     git-short-hash HEAD
 } # git-head
 
-# git-branch-names(void)
-# Return a space-delimited list of branch names.
+# Print a space-delimited list of branch names.
+# Usage: git-branch-names
 function git-branch-names() {
     git branch --format "%(refname:short)"
 } # git-branch-names
 
-# git-revs([args])
-# Return all revisions with parents, if applicable.
-# Each Line: commit_hash [parent_hash]...
+# Print all revisions with parents, if applicable, in chronological order.
+# Each line in the output looks like this for some commit:
+#
+#     commit_hash [parent_hash]...
+#
+# Usage: git-revs
 function git-revs() {
+    # Since Git stores its history in reverse chronological order (i.e., the
+    # most recent commit is first), we use '--reverse' to get the commits in
+    # chronological order.
     git rev-list --all --parents --reverse | while read -r line; do
         hashes=()
         for arg in $line; do
@@ -86,7 +92,11 @@ function git-revs() {
     done
 } # git-revs
 
-# dot-node(NAME, LABEL[, STYLE])
+# Print a dot node named NAME with a specified LABEL. If more arguments are
+# provided, then they are treated as one long quoted string and concatenated to
+# the node's attribute list.
+# Usage: dot-node NAME LABEL
+# Usage: dot-node NAME LABEL ATTRIBUTES...
 function dot-node() {
     local name=$1
     local label=$2
@@ -98,6 +108,11 @@ function dot-node() {
     fi
 } #dot-node
 
+# Prints a directed dot edge from NODE1 to NODE2. If more arguments are
+# provided, then they are treated as one long quoted string and concatenated to
+# the edges's attribute list.
+# Usage: dot-edge NODE1 NODE2
+# Usage: dot-node NODE1 NODE2 ATTRIBUTES...
 function dot-edge() {
     local node1=$1
     local node2=$2
@@ -109,59 +124,79 @@ function dot-edge() {
     fi
 } # dot-edge
 
+# Prints a dot subgraph named NAME where all nodes have the same rank.
+# Subsequent arguments are assumed to be entries in the subgraph.
+# Usage: dot-subgraph NAME ENTRY...
 function dot-subgraph() {
-    local label=$1
-    shift
-    echo "    subgraph ${label} {"
+    local name=$1
+    shift 1
+    local entries=$@
+    echo "    subgraph ${name} {"
     echo "        rank=\"same\""
-    for node in $@; do
-        echo "        ${node}"
+    for entry in ${entries}; do
+        echo "        ${entry}"
     done
     echo "    }"
 } # dot-subgraph
 
+# Prints one dot node for each branch in the current repository.
+# Usage: dot-branch-nodes
 function dot-branch-nodes() {
     local i=1
     for branch in $(git-branch-names); do
-        branches["b$i"]=$(git-short-hash $branch)
+        branches["b$i"]=$(git-short-hash $branch) # save for later
         dot-node "b$i" "$branch" ${STYLE_BRANCH}
         ((i=i+1))
     done
 } # dot-branch-nodes
 
+# Prints a dot node for each commit and one dot edge from that commit to each of
+# its parents.
+# Usage: dot-commit-nodes-and-edges
 function dot-commit-nodes-and-edges() {
     local i=1
     while read -r line; do
-        commit=$(echo $line | field 1)
-        commits[$commit]="c$i"
-        dot-node "${commits[$commit]}" "$commit"
+        local commit_short_hash=$(echo $line | field 1)
+        local commit_node_name="c$i"
+        commits[$commit_short_hash]=${commit_node_name} # save for later
+        dot-node "${commit_node_name}" "$commit_short_hash"
         if [ $(wc -w <<< $line) -gt 1 ]; then
-            parents=$(echo $line | field 2-)
-            for parent in $parents; do
-                dot-edge "${commits[$commit]}" "${commits[$parent]}"
+            local parent_hashes=$(echo $line | field 2-)
+            for parent_hash in $parent_hashes; do
+                local parent_node_name="${commits[$parent_hash]}"
+                dot-edge "${commit_node_name}" "${parent_node_name}"
             done
         fi
         ((i=i+1))
     done < <(git-revs)
 } # dot-commit-nodes-and-edges
 
-function dot-branch-edges {
-    for branch in "${!branches[@]}"; do
-        commit=${branches[${branch}]}
-        node=${commits[$commit]}
-        dot-edge "$branch" "$node"
-        if [ "${commit}" == "$(git-head)" ]; then
-            dot-subgraph "${branch}_sub" "${branch}" "${node}" "head"
-            dot-edge "head" "${branch}"
+# Print a dot subgraph for each branch that contains relevant nodes and edges.
+# This currently assumes that 'dot-branch-nodes' has already been called and
+# the 'branches' array has already been populated.
+# Usage: dot-branch-edges
+function dot-branch-edges() {
+    for branch_node_name in "${!branches[@]}"; do
+        local commit_short_hash=${branches[${branch_node_name}]}
+        local commit_node_name=${commits[${commit_short_hash}]}
+        dot-edge "${branch_node_name}" "${commit_node_name}"
+        if [ "${commit_short_hash}" == "$(git-head)" ]; then
+            dot-subgraph "${branch_node_name}_sub" \
+                         "${branch_node_name}" "${commit_node_name}" "head"
+            dot-edge "head" "${branch_node_name}"
         else
-            dot-subgraph "${branch}_sub" "${branch}" "${node}"
+            dot-subgraph "${branch_node_name}_sub" \
+                         "${branch_node_name}" "${commit_node_name}"
         fi
     done
 } # dot-branch-edges
 
-function dot-digraph {
+# Prints a dot digraph representing the current Git repository.
+# Usage: dot-digraph
+function dot-digraph() {
     cat <<EOF
 digraph {
+    bgcolor="transparent"
     rankdir=RL
     edge [${STYLE_EDGE}]
     node [${STYLE_NODE}, ${STYLE_FONT}]
@@ -175,4 +210,10 @@ EOF
 EOF
 } # dot-digraph
 
-dot-digraph
+# The designated start of the program.
+function main() {
+    git status >> /dev/null
+    dot-digraph
+} # main
+
+main
